@@ -46,6 +46,7 @@ export namespace FileTime {
     readonly get: (sessionID: SessionID, file: string) => Effect.Effect<Date | undefined>
     readonly assert: (sessionID: SessionID, filepath: string) => Effect.Effect<void>
     readonly withLock: <T>(filepath: string, fn: () => Promise<T>) => Effect.Effect<T>
+    readonly remove: (sessionID: SessionID) => Effect.Effect<void>
   }
 
   export class Service extends ServiceMap.Service<Service, Interface>()("@opencode/FileTime") {}
@@ -104,7 +105,12 @@ export namespace FileTime {
         return yield* Effect.promise(fn).pipe((yield* getLock(filepath)).withPermits(1))
       })
 
-      return Service.of({ read, get, assert, withLock })
+      const remove = Effect.fn("FileTime.remove")(function* (sessionID: SessionID) {
+        const reads = (yield* InstanceState.get(state)).reads
+        reads.delete(sessionID)
+      })
+
+      return Service.of({ read, get, assert, withLock, remove })
     }),
   ).pipe(Layer.orDie)
 
@@ -120,6 +126,10 @@ export namespace FileTime {
 
   export async function assert(sessionID: SessionID, filepath: string) {
     return runPromise((s) => s.assert(sessionID, filepath))
+  }
+
+  export function remove(sessionID: SessionID) {
+    return runPromise((s) => s.remove(sessionID))
   }
 
   export async function withLock<T>(filepath: string, fn: () => Promise<T>): Promise<T> {

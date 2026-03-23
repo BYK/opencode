@@ -54,6 +54,7 @@ import { createAim } from "@/utils/aim"
 import { setNavigate } from "@/utils/notification-click"
 import { Worktree as WorktreeState } from "@/utils/worktree"
 import { setSessionHandoff } from "@/pages/session/handoff"
+import { formatServerError } from "@/utils/server-errors"
 
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme"
@@ -986,11 +987,21 @@ export default function Layout(props: ParentProps) {
     const index = sessions.findIndex((s) => s.id === session.id)
     const nextSession = sessions[index + 1] ?? sessions[index - 1]
 
-    await globalSDK.client.session.update({
-      directory: session.directory,
-      sessionID: session.id,
-      time: { archived: Date.now() },
-    })
+    try {
+      await globalSDK.client.session.update({
+        directory: session.directory,
+        sessionID: session.id,
+        time: { archived: Date.now() },
+      })
+    } catch (err) {
+      console.error("archive failed", err)
+      showToast({
+        variant: "error",
+        title: language.t("common.error"),
+        description: formatServerError(err, language.t),
+      })
+      return
+    }
     setStore(
       produce((draft) => {
         const match = Binary.search(draft.session, session.id, (s) => s.id)
@@ -1248,6 +1259,9 @@ export default function Layout(props: ParentProps) {
   function syncSessionRoute(directory: string, id: string, root = activeProjectRoot(directory)) {
     rememberSessionRoute(directory, id, root)
     notification.session.markViewed(id)
+    const project = currentProject()
+    const dirs = project ? [project.worktree, ...(project.sandboxes ?? [])] : [directory]
+    for (const dir of dirs) notification.project.markViewed(dir)
     const expanded = untrack(() => store.workspaceExpanded[directory])
     if (expanded === false) {
       setStore("workspaceExpanded", directory, true)

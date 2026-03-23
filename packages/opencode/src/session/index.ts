@@ -563,6 +563,7 @@ export namespace Session {
     if (input?.search) {
       conditions.push(like(SessionTable.title, `%${input.search}%`))
     }
+    conditions.push(isNull(SessionTable.time_archived))
 
     const limit = input?.limit ?? 100
 
