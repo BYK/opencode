@@ -5,6 +5,7 @@ import { Button } from "@opencode-ai/ui/button"
 import { DockPrompt } from "@opencode-ai/session-ui/dock-prompt"
 import { Icon } from "@opencode-ai/ui/icon"
 import { useSpring } from "@opencode-ai/ui/motion-spring"
+import { Markdown } from "@opencode-ai/session-ui/markdown"
 import { showToast } from "@/utils/toast"
 import type { QuestionAnswer, QuestionRequest } from "@opencode-ai/sdk/v2"
 import { useLanguage } from "@/context/language"
@@ -527,7 +528,7 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
             overflow: store.minimized ? "hidden" : undefined,
           }}
         >
-          {question()?.question}
+          {question()?.question ? <Markdown text={question()!.question} /> : null}
         </div>
         <Show when={!store.minimized}>
           <Show when={multi()} fallback={<div data-slot="question-hint">{language.t("ui.question.singleHint")}</div>}>
