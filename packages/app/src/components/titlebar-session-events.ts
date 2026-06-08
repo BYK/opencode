@@ -1,6 +1,7 @@
 import type { ServerConnection } from "@/context/server"
 
 export const SESSION_TABS_REMOVED_EVENT = "opencode:session-tabs-removed"
+export const SESSION_TABS_RESTORED_EVENT = "opencode:session-tabs-restored"
 
 export type SessionTabsRemovedDetail = {
   server?: ServerConnection.Key
@@ -8,8 +9,17 @@ export type SessionTabsRemovedDetail = {
   sessionIDs: string[]
 }
 
+// Restored mirrors removed: same payload shape, opposite intent. Fired when an
+// optimistic archive/delete fails and the removed session tab(s) must be
+// re-added to the strip.
+export type SessionTabsRestoredDetail = SessionTabsRemovedDetail
+
 export function notifySessionTabsRemoved(input: SessionTabsRemovedDetail) {
   window.dispatchEvent(new CustomEvent(SESSION_TABS_REMOVED_EVENT, { detail: input }))
+}
+
+export function notifySessionTabsRestored(input: SessionTabsRestoredDetail) {
+  window.dispatchEvent(new CustomEvent(SESSION_TABS_RESTORED_EVENT, { detail: input }))
 }
 
 export function readSessionTabsRemovedDetail(event: Event): SessionTabsRemovedDetail | undefined {
@@ -33,3 +43,6 @@ export function readSessionTabsRemovedDetail(event: Event): SessionTabsRemovedDe
     sessionIDs,
   }
 }
+
+// Restored uses the same payload shape, so validation is identical.
+export const readSessionTabsRestoredDetail = readSessionTabsRemovedDetail

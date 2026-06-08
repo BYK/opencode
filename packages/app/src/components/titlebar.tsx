@@ -31,7 +31,12 @@ import { applyPath, backPath, forwardPath } from "./titlebar-history"
 import { TitlebarTabStrip } from "@/components/titlebar-tab-strip"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createMediaQuery } from "@solid-primitives/media"
-import { readSessionTabsRemovedDetail, SESSION_TABS_REMOVED_EVENT } from "@/components/titlebar-session-events"
+import {
+  readSessionTabsRemovedDetail,
+  readSessionTabsRestoredDetail,
+  SESSION_TABS_REMOVED_EVENT,
+  SESSION_TABS_RESTORED_EVENT,
+} from "@/components/titlebar-session-events"
 import { useGlobal } from "@/context/global"
 import { ServerConnection, useServer } from "@/context/server"
 import { tabKey, useTabs } from "@/context/tabs"
@@ -259,6 +264,12 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
               const detail = readSessionTabsRemovedDetail(event)
               if (!detail) return
               tabsStoreActions.removeSessions(detail)
+            })
+
+            makeEventListener(window, SESSION_TABS_RESTORED_EVENT, (event) => {
+              const detail = readSessionTabsRestoredDetail(event)
+              if (!detail) return
+              tabsStoreActions.restoreSessions(detail)
             })
 
             const openNewTab = () => {

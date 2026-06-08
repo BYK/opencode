@@ -7,7 +7,7 @@ import { createEffect, getOwner, onCleanup, startTransition } from "solid-js"
 import { useLocation, useNavigate, useParams } from "@solidjs/router"
 import { usePlatform } from "./platform"
 import { uuid } from "@/utils/uuid"
-import { SessionTabsRemovedDetail } from "@/components/titlebar-session-events"
+import { SessionTabsRemovedDetail, SessionTabsRestoredDetail } from "@/components/titlebar-session-events"
 import { sessionHref } from "@/utils/session-route"
 import { createTabMemory } from "./tab-memory"
 import { nextTabAfterClose, pushClosedTab, removeClosedTabs, takeClosedTab, type ClosedTab } from "./closed-tabs"
@@ -346,6 +346,15 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
         })
         for (const key of removed) memory.remove(key)
         for (const key of removed) removeInfo(key)
+      },
+      // Re-add session tabs removed optimistically by removeSessions after the
+      // backing archive/delete failed. addSessionTab dedupes, so restoring a
+      // tab that still exists is a no-op.
+      restoreSessions: (input: SessionTabsRestoredDetail) => {
+        const targetServer = input.server ?? server.key
+        for (const sessionId of input.sessionIDs) {
+          actions.addSessionTab({ server: targetServer, sessionId })
+        }
       },
       rememberSessionInfo(tab: SessionTab, session: Session) {
         const key = tabKey(tab)

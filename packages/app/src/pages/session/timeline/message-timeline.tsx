@@ -55,6 +55,7 @@ import type {
 import { showToast } from "@/utils/toast"
 import { downloadSessionExport, fetchSessionExport, sessionExportFilename } from "@/utils/session-export"
 import { getDirectory, getFilename } from "@opencode-ai/core/util/path"
+import { Binary } from "@opencode-ai/core/util/binary"
 import { Popover as KobaltePopover } from "@kobalte/core/popover"
 import { normalize } from "@opencode-ai/session-ui/session-diff"
 import { useFileComponent } from "@opencode-ai/ui/context/file"
@@ -70,7 +71,7 @@ import { useTabs } from "@/context/tabs"
 import { legacySessionHref, requireServerKey, sessionHref } from "@/utils/session-route"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
-import { notifySessionTabsRemoved } from "@/components/titlebar-session-events"
+import { notifySessionTabsRemoved, notifySessionTabsRestored } from "@/components/titlebar-session-events"
 import { sessionTitle } from "@/utils/session-title"
 import { scheduleConnectedMeasure } from "./measure"
 import { observeElementOffsetReconnectAware } from "./observe-element-offset"
@@ -841,20 +842,28 @@ export function MessageTimeline(props: {
     const index = sessions.findIndex((s) => s.id === sessionID)
     const nextSession = index === -1 ? undefined : (sessions[index + 1] ?? sessions[index - 1])
 
-    await sdk()
+    // Optimistic: remove immediately and navigate
+    sync().set(
+      produce((draft) => {
+        const match = Binary.search(draft.session, sessionID, (s) => s.id)
+        if (match.found) draft.session.splice(match.index, 1)
+      }),
+    )
+    sync().session.evict(sessionID)
+    navigateAfterSessionRemoval(sessionID, session.parentID, nextSession?.id)
+    notifySessionTabsRemoved({ directory: sdk().directory, sessionIDs: [sessionID] })
+
+    sdk()
       .client.session.update({ sessionID, directory: sdk().directory, time: { archived: Date.now() } })
-      .then(() => {
+      .catch((err) => {
+        // Rollback: re-insert session
         sync().set(
           produce((draft) => {
-            const index = draft.session.findIndex((s) => s.id === sessionID)
-            if (index !== -1) draft.session.splice(index, 1)
+            const result = Binary.search(draft.session, sessionID, (s) => s.id)
+            if (!result.found) draft.session.splice(result.index, 0, session)
           }),
         )
-        sync().session.evict(sessionID)
-        navigateAfterSessionRemoval(sessionID, session.parentID, nextSession?.id)
-        notifySessionTabsRemoved({ directory: sdk().directory, sessionIDs: [sessionID] })
-      })
-      .catch((err) => {
+        notifySessionTabsRestored({ directory: sdk().directory, sessionIDs: [sessionID] })
         showToast({
           title: language.t("common.requestFailed"),
           description: errorMessage(err),
@@ -862,7 +871,7 @@ export function MessageTimeline(props: {
       })
   }
 
-  const deleteSession = async (sessionID: string) => {
+  const deleteSession = (sessionID: string) => {
     const session = sync().session.get(sessionID)
     if (!session) return false
 
@@ -870,19 +879,7 @@ export function MessageTimeline(props: {
     const index = sessions.findIndex((s) => s.id === sessionID)
     const nextSession = index === -1 ? undefined : (sessions[index + 1] ?? sessions[index - 1])
 
-    const result = await sdk()
-      .api.session.remove({ sessionID })
-      .then(() => true)
-      .catch((err) => {
-        showToast({
-          title: language.t("session.delete.failed.title"),
-          description: errorMessage(err),
-        })
-        return false
-      })
-
-    if (!result) return false
-
+    // Collect sessions to remove (target + children) for rollback
     const removed = new Set<string>([sessionID])
     const byParent = new Map<string, string[]>()
     for (const item of sync().data.session) {
@@ -911,6 +908,10 @@ export function MessageTimeline(props: {
       }
     }
 
+    // Snapshot removed sessions for rollback
+    const removedSessions = sync().data.session.filter((s) => removed.has(s.id))
+
+    // Optimistic: remove immediately and navigate
     navigateAfterSessionRemoval(sessionID, session.parentID, nextSession?.id)
 
     sync().set(
@@ -923,6 +924,27 @@ export function MessageTimeline(props: {
       sync().session.evict(id)
     }
     notifySessionTabsRemoved({ directory: sdk().directory, sessionIDs: [...removed] })
+
+    sdk()
+      .api.session.remove({ sessionID })
+      .catch((err) => {
+        // Rollback: re-insert removed sessions
+        sync().set(
+          produce((draft) => {
+            for (const s of removedSessions) {
+              const result = Binary.search(draft.session, s.id, (x) => x.id)
+              if (!result.found) draft.session.splice(result.index, 0, s)
+            }
+          }),
+        )
+        notifySessionTabsRestored({ directory: sdk().directory, sessionIDs: [...removed] })
+        showToast({
+          title: language.t("session.delete.failed.title"),
+          description: errorMessage(err),
+        })
+        return false
+      })
+
     return true
   }
 
