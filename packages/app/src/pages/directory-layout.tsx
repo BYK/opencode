@@ -2,7 +2,7 @@ import { DataProvider } from "@opencode-ai/session-ui/context"
 import { showToast } from "@/utils/toast"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { useLocation, useNavigate, useParams } from "@solidjs/router"
-import { type Accessor, createEffect, createMemo, createResource, onCleanup, type ParentProps, Show } from "solid-js"
+import { type Accessor, createEffect, createMemo, onCleanup, type ParentProps, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { LocalProvider } from "@/context/local"
 import { SDKProvider } from "@/context/sdk"
@@ -22,9 +22,9 @@ export function DirectoryDataProvider(
 ) {
   const location = useLocation()
   const navigate = useNavigate()
-  const params = useParams()
   const sync = useSync()
   const serverSync = useServerSync()
+  const params = useParams()
   const directory = () => (typeof props.directory === "function" ? props.directory() : props.directory)
   const slug = createMemo(() => base64Encode(directory()))
   const href = (sessionID: string) => {
@@ -42,13 +42,7 @@ export function DirectoryDataProvider(
     navigate(`/${base64Encode(next)}${path}${location.search}${location.hash}`, { replace: true })
   })
 
-  createResource(
-    () => params.id,
-    (id) =>
-      sync()
-        .session.sync(id)
-        .catch(() => {}),
-  )
+  // Session sync is handled by session.tsx — no duplicate createResource needed here.
 
   createEffect(() => {
     const sessionID = params.id
