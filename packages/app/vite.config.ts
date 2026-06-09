@@ -29,5 +29,17 @@ export default defineConfig({
   build: {
     target: "esnext",
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/katex")) return "katex"
+          if (id.includes("node_modules/shiki") || id.includes("node_modules/@shikijs")) return "shiki"
+          if (id.includes("node_modules/@kobalte")) return "kobalte"
+          if (id.includes("node_modules/effect")) return "effect"
+          if (id.includes("node_modules/luxon")) return "luxon"
+          if (id.includes("node_modules/@pierre")) return "pierre"
+        },
+      },
+    },
   },
 })
