@@ -3,7 +3,7 @@ import type { Event } from "@opencode-ai/sdk/v2/client"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { makeEventListener } from "@solid-primitives/event-listener"
-import { type Accessor, batch, createMemo, createResource, onCleanup, onMount } from "solid-js"
+import { type Accessor, batch, createMemo, createResource, createSignal, onCleanup, onMount } from "solid-js"
 import { createApiForServer, createSdkForServer, type ServerApi } from "@/utils/server"
 import { useLanguage } from "./language"
 import { usePlatform } from "./platform"
@@ -174,6 +174,8 @@ type ServerSDKBase = {
   client: ReturnType<typeof createSdkForServer>
   api: CompatibleApi
   currentApi: ServerApi
+  connected: Accessor<boolean>
+  readonly reconnecting: boolean
   event: {
     on: ServerEventEmitter["on"]
     listen: ServerEventEmitter["listen"]
@@ -217,7 +219,8 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
   type Queued = QueuedServerEvent
   const FLUSH_FRAME_MS = 16
   const STREAM_YIELD_MS = 8
-  const RECONNECT_DELAY_MS = 250
+  const RECONNECT_DELAY_INITIAL_MS = 250
+  const RECONNECT_DELAY_MAX_MS = 5_000
 
   let queue: Queued[] = []
   let buffer: Queued[] = []
@@ -256,6 +259,24 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
   let run: Promise<void> | undefined
   let started = false
   let generation = 0
+  const HEARTBEAT_TIMEOUT_MS = 30_000
+  let lastEventAt = Date.now()
+  let reconnectDelay = RECONNECT_DELAY_INITIAL_MS
+  const [connected, setConnected] = createSignal(false)
+  let everConnected = false
+  let heartbeat: ReturnType<typeof setTimeout> | undefined
+  const resetHeartbeat = () => {
+    lastEventAt = Date.now()
+    if (heartbeat) clearTimeout(heartbeat)
+    heartbeat = setTimeout(() => {
+      attempt?.abort()
+    }, HEARTBEAT_TIMEOUT_MS)
+  }
+  const clearHeartbeat = () => {
+    if (!heartbeat) return
+    clearTimeout(heartbeat)
+    heartbeat = undefined
+  }
 
   const start = () => {
     if (started) return run
@@ -279,6 +300,10 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
               : eventApi.event.subscribe({ signal: attempt.signal })
           let yielded = Date.now()
           for await (const event of events) {
+            resetHeartbeat()
+            reconnectDelay = RECONNECT_DELAY_INITIAL_MS
+            everConnected = true
+            setConnected(true)
             streamErrorLogged = false
             const legacy = "payload" in event
             if (legacy && event.payload.type === "sync") continue
@@ -300,12 +325,15 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
             })
           }
         } finally {
+          setConnected(false)
           abort.signal.removeEventListener("abort", onAbort)
           attempt = undefined
+          clearHeartbeat()
         }
 
         if (abort.signal.aborted || !started || generation !== active) return
-        await wait(RECONNECT_DELAY_MS)
+        await wait(reconnectDelay)
+        reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_DELAY_MAX_MS)
       }
     })().finally(() => {
       if (run !== current) return
@@ -325,6 +353,20 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
   onMount(() => {
     makeEventListener(window, "pagehide", stop)
     makeEventListener(window, "pageshow", (event) => resumeStreamAfterPageShow(event, start))
+    makeEventListener(document, "visibilitychange", () => {
+      if (document.visibilityState !== "visible") return
+      // When the page becomes visible (mobile tab switch, phone unlock, etc.),
+      // aggressively reconnect if the stream has been idle. Use a shorter
+      // threshold (5s) than the heartbeat timeout to recover faster.
+      if (!started) {
+        reconnectDelay = RECONNECT_DELAY_INITIAL_MS
+        start()
+        return
+      }
+      if (Date.now() - lastEventAt < 5_000) return
+      reconnectDelay = RECONNECT_DELAY_INITIAL_MS
+      attempt?.abort()
+    })
   })
 
   onCleanup(() => {
@@ -357,6 +399,12 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
     client: sdk,
     api,
     currentApi,
+    connected,
+    // Only true after we've been connected at least once and then lost connection.
+    // Prevents a flash of "reconnecting" during initial page load.
+    get reconnecting() {
+      return everConnected && !connected()
+    },
     event: {
       on: emitter.on.bind(emitter),
       listen: emitter.listen.bind(emitter),

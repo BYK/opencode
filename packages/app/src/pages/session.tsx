@@ -890,6 +890,19 @@ export default function Page() {
 
   const hasScrollGesture = () => Date.now() - ui.scrollGesture < scrollGestureWindowMs
 
+  // When the SSE stream reconnects after a disconnect (mobile resume, network
+  // recovery), force-refresh the active session's messages so the user sees
+  // up-to-date state without needing to navigate away and back.
+  let wasConnected = serverSDK().connected()
+  createEffect(() => {
+    const isConnected = serverSDK().connected()
+    if (isConnected && !wasConnected) {
+      const id = params.id
+      if (id) void sync().session.sync(id, { force: true })
+    }
+    wasConnected = isConnected
+  })
+
   createEffect(
     on(
       () => {

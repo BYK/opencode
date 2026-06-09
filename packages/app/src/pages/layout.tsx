@@ -2267,6 +2267,12 @@ export default function LegacyLayout(props: ParentProps) {
             : undefined
         }
       />
+      <Show when={serverSDK().reconnecting}>
+        <div data-component="reconnecting-banner" class="flex items-center justify-center gap-2 px-3 py-1.5 text-xs bg-warning/10 text-warning border-b border-warning/20">
+          <div class="size-2 rounded-full bg-warning animate-pulse" />
+          Reconnecting to server...
+        </div>
+      </Show>
       <Show when={updateVersion() !== undefined}>
         <UpdateAvailableToast version={updateVersion() ?? ""} install={installUpdate} language={language} />
       </Show>
