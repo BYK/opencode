@@ -586,11 +586,15 @@ export default function Page() {
 
   createEffect(
     on(
-      () => ({ dir: sdk().directory, id: params.id }),
-      (next, prev) => {
+      // Use a primitive string key instead of creating a new object on every
+      // evaluation. SolidJS on() uses === comparison, so a string avoids
+      // the always-different-reference problem that objects have.
+      () => `${params.dir}\0${params.id ?? ""}`,
+      (_next, prev) => {
         if (!prev) return
-        if (next.dir === prev.dir && next.id === prev.id) return
-        if (prev.id && !next.id) local.session.reset()
+        // prev had a session ID (non-empty after the separator) and now there's none
+        const prevHadId = prev.indexOf("\0") < prev.length - 1
+        if (prevHadId && !params.id) local.session.reset()
       },
       { defer: true },
     ),
