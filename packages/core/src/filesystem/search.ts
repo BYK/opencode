@@ -123,6 +123,15 @@ export const fffLayer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const location = yield* Location.Service
+    const fs = yield* FSUtil.Service
+    const empty = Service.of({
+      find: () => Effect.succeed([]),
+      glob: () => Effect.succeed([]),
+      grep: () => Effect.succeed([]),
+    })
+    // A session's worktree can be removed while its session record lingers. Skip fff init for a
+    // missing directory to avoid the native finder's repeated "Invalid path" failures and log noise.
+    if (!(yield* fs.existsSafe(location.directory))) return empty
     const result = yield* Effect.try({
       try: () =>
         Fff.create({
@@ -137,11 +146,7 @@ export const fffLayer = Layer.effect(
     )
     if (!result?.ok) {
       if (result) yield* Effect.logWarning("failed to initialize fff", { error: result.error })
-      return Service.of({
-        find: () => Effect.succeed([]),
-        glob: () => Effect.succeed([]),
-        grep: () => Effect.succeed([]),
-      })
+      return empty
     }
     yield* Effect.addFinalizer(() => Effect.sync(() => result.value.destroy()).pipe(Effect.ignore))
     return Service.of({
