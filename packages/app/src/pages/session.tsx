@@ -29,6 +29,7 @@ import { createStore } from "solid-js/store"
 import type { SessionReviewLineComment } from "@opencode-ai/session-ui/session-review"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Select } from "@opencode-ai/ui/select"
+import { Spinner } from "@opencode-ai/ui/spinner"
 import { SelectV2 } from "@opencode-ai/ui/v2/select-v2"
 import { isScrollKeyTarget, scrollKey, scrollKeyOwner } from "@opencode-ai/ui/scroll-view"
 import { Tabs } from "@opencode-ai/ui/tabs"
@@ -902,7 +903,12 @@ export default function Page() {
     const isConnected = serverSDK().connected()
     if (isConnected && !wasConnected) {
       const id = params.id
-      if (id) void sync().session.sync(id, { force: true })
+      if (id) {
+        const done = serverSDK().beginCatchUp()
+        void sync()
+          .session.sync(id, { force: true })
+          .finally(done)
+      }
     }
     wasConnected = isConnected
   })
@@ -2096,7 +2102,18 @@ export default function Page() {
             </div>
           </Match>
           <Match when={params.id}>
-            <Show when={messagesReady() ? params.id : undefined} keyed>
+            <Show
+              when={messagesReady() ? params.id : undefined}
+              keyed
+              fallback={
+                <Show when={historyLoading()}>
+                  <div class="flex-1 flex items-center justify-center gap-2 text-text-weak">
+                    <Spinner class="size-4" />
+                    <span>{language.t("session.messages.loading")}</span>
+                  </div>
+                </Show>
+              }
+            >
               {(_id) => (
                 <MessageTimeline
                   actions={actions}

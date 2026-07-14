@@ -176,6 +176,8 @@ type ServerSDKBase = {
   currentApi: ServerApi
   connected: Accessor<boolean>
   readonly reconnecting: boolean
+  readonly catchingUp: boolean
+  beginCatchUp: () => () => void
   event: {
     on: ServerEventEmitter["on"]
     listen: ServerEventEmitter["listen"]
@@ -259,11 +261,15 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
   let run: Promise<void> | undefined
   let started = false
   let generation = 0
-  const HEARTBEAT_TIMEOUT_MS = 30_000
+  const HEARTBEAT_TIMEOUT_MS = 15_000
   let lastEventAt = Date.now()
   let reconnectDelay = RECONNECT_DELAY_INITIAL_MS
   const [connected, setConnected] = createSignal(false)
   let everConnected = false
+  // Tracks post-reconnect data catch-up (e.g. forced message refetch) so the UI
+  // can keep a "syncing" indicator up until the data settles, not just until the
+  // socket reopens. Counter because multiple refetches may overlap.
+  const [catchUpCount, setCatchUpCount] = createSignal(0)
   let heartbeat: ReturnType<typeof setTimeout> | undefined
   const resetHeartbeat = () => {
     lastEventAt = Date.now()
@@ -351,13 +357,10 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
   }
 
   onMount(() => {
-    makeEventListener(window, "pagehide", stop)
-    makeEventListener(window, "pageshow", (event) => resumeStreamAfterPageShow(event, start))
-    makeEventListener(document, "visibilitychange", () => {
-      if (document.visibilityState !== "visible") return
-      // When the page becomes visible (mobile tab switch, phone unlock, etc.),
-      // aggressively reconnect if the stream has been idle. Use a shorter
-      // threshold (5s) than the heartbeat timeout to recover faster.
+    // When the page becomes visible / regains focus / the network comes back,
+    // aggressively reconnect if the stream has been idle. Uses a shorter
+    // threshold (5s) than the heartbeat timeout to recover faster.
+    const resumeIfIdle = () => {
       if (!started) {
         reconnectDelay = RECONNECT_DELAY_INITIAL_MS
         start()
@@ -366,6 +369,21 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
       if (Date.now() - lastEventAt < 5_000) return
       reconnectDelay = RECONNECT_DELAY_INITIAL_MS
       attempt?.abort()
+    }
+
+    makeEventListener(window, "pagehide", stop)
+    makeEventListener(window, "pageshow", (event) => resumeStreamAfterPageShow(event, start))
+    makeEventListener(document, "visibilitychange", () => {
+      if (document.visibilityState !== "visible") return
+      resumeIfIdle()
+    })
+    // Desktop tab focus and network-recovery don't always fire visibilitychange,
+    // so cover those paths too.
+    makeEventListener(window, "focus", resumeIfIdle)
+    makeEventListener(window, "online", () => {
+      reconnectDelay = RECONNECT_DELAY_INITIAL_MS
+      if (!started) start()
+      else attempt?.abort()
     })
   })
 
@@ -404,6 +422,21 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
     // Prevents a flash of "reconnecting" during initial page load.
     get reconnecting() {
       return everConnected && !connected()
+    },
+    // True while a post-reconnect data catch-up is in flight (socket is back but
+    // messages/lists are still refetching). Distinct from `reconnecting`.
+    get catchingUp() {
+      return catchUpCount() > 0
+    },
+    // Register an in-flight catch-up; returns a callback to mark it complete.
+    beginCatchUp() {
+      setCatchUpCount((count) => count + 1)
+      let done = false
+      return () => {
+        if (done) return
+        done = true
+        setCatchUpCount((count) => Math.max(0, count - 1))
+      }
     },
     event: {
       on: emitter.on.bind(emitter),

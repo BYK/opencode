@@ -327,6 +327,9 @@ export const SortableWorkspace = (props: {
   const fetching = useIsFetching(() => queryOptions().sessions(pathKey(props.directory)))
   const busy = createMemo(() => props.ctx.isBusy(props.directory))
   const loading = () => fetching() > 0 && count() === 0
+  // Background refetch while sessions are already shown (e.g. return-from-idle
+  // catch-up). Surfaces a spinner instead of silently showing stale rows.
+  const refreshing = createMemo(() => fetching() > 0 && count() > 0)
   const touch = createMediaQuery("(hover: none)")
   const showNew = createMemo(() => !loading() && (touch() || count() === 0 || (active() && !params.id)))
   const loadMore = async () => {
@@ -338,7 +341,7 @@ export const SortableWorkspace = (props: {
   const header = () => (
     <WorkspaceHeader
       local={local}
-      busy={busy}
+      busy={() => busy() || refreshing()}
       open={open}
       directory={props.directory}
       language={language}

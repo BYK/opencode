@@ -776,20 +776,29 @@ export function createServerSession(
             ),
           ),
         ]
-        for (const parentID of parentIDs) {
-          if (generations.get(sessionID) !== active) break
-          const parent = await fetchMessage(sessionID, parentID, () =>
-            resetMessageLoad(sessionID, load, messageLoadBaseline(load, parentID)),
-          ).catch((error) => {
-            const cause = error instanceof Error && typeof error.cause === "object" ? error.cause : undefined
-            if (cause && "status" in cause && cause.status === 404) {
-              load.removedMessages.add(parentID)
-              return
-            }
-            throw error
-          })
+        // Fetch parent user messages in parallel; a large conversation can have
+        // many, and fetching them serially adds a round-trip each, extending the
+        // blank/loading window. Ordering is restored by `merge` downstream.
+        const fetched = await Promise.all(
+          parentIDs.map((parentID) =>
+            generations.get(sessionID) !== active
+              ? undefined
+              : fetchMessage(sessionID, parentID, () =>
+                  resetMessageLoad(sessionID, load, messageLoadBaseline(load, parentID)),
+                ).catch((error) => {
+                  const cause = error instanceof Error && typeof error.cause === "object" ? error.cause : undefined
+                  if (cause && "status" in cause && cause.status === 404) {
+                    load.removedMessages.add(parentID)
+                    return
+                  }
+                  throw error
+                }),
+          ),
+        )
+        for (const parent of fetched) {
           if (!parent) continue
-          if (parent.message.role !== "user") throw new Error(`Assistant parent is not a user message: ${parentID}`)
+          if (parent.message.role !== "user")
+            throw new Error(`Assistant parent is not a user message: ${parent.message.id}`)
           parents.push(parent)
         }
       }
