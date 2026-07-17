@@ -5,6 +5,7 @@ import {
   createSignal,
   Match,
   on,
+  onCleanup,
   onMount,
   Show,
   Switch,
@@ -39,6 +40,8 @@ import {
 } from "@/components/titlebar-session-events"
 import { useGlobal } from "@/context/global"
 import { ServerConnection, useServer } from "@/context/server"
+import { useServerSDK } from "@/context/server-sdk"
+import { Spinner } from "@opencode-ai/ui/spinner"
 import { tabKey, useTabs } from "@/context/tabs"
 import type { PromptSession } from "@/context/prompt"
 import "./titlebar.css"
@@ -73,6 +76,7 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
   const language = useLanguage()
   const settings = useSettings()
   const server = useServer()
+  const serverSDK = useServerSDK()
   const navigate = useNavigate()
   const location = useLocation()
   const params = useParams()
@@ -124,6 +128,20 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
 
   const canBack = createMemo(() => history.index > 0)
   const canForward = createMemo(() => history.index < history.stack.length - 1)
+  // Debounced sync/reconnect indicator: only show if it persists past a short
+  // delay (avoids flicker on instant reconnects), and hold briefly once shown.
+  const syncingRaw = createMemo(() => serverSDK().reconnecting || serverSDK().catchingUp)
+  const [showSync, setShowSync] = createSignal(false)
+  createEffect(() => {
+    if (syncingRaw()) {
+      const show = window.setTimeout(() => setShowSync(true), 350)
+      onCleanup(() => window.clearTimeout(show))
+      return
+    }
+    if (!showSync()) return
+    const hide = window.setTimeout(() => setShowSync(false), 500)
+    onCleanup(() => window.clearTimeout(hide))
+  })
   const hasProjects = createMemo(() => layout.projects.list().length > 0)
   const nav = createMemo(() => (useV2Titlebar() ? settings.general.showNavigation() : true))
   const updateState = createMemo<TitlebarUpdatePillState>(() => {
@@ -569,6 +587,17 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                           />
                         </Tooltip>
                       </div>
+                    </Show>
+                    <Show when={showSync()}>
+                      <Tooltip
+                        placement="bottom"
+                        value={serverSDK().reconnecting ? language.t("common.reconnecting") : language.t("common.syncing")}
+                        openDelay={400}
+                      >
+                        <div class="flex items-center justify-center w-6 h-6 shrink-0 text-text-weak" aria-hidden="true">
+                          <Spinner class="size-3.5" />
+                        </div>
+                      </Tooltip>
                     </Show>
                     <div id="opencode-titlebar-left" class="flex items-center gap-3 min-w-0 px-2" />
                   </div>

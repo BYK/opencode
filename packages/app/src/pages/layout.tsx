@@ -634,7 +634,10 @@ export default function LegacyLayout(props: ParentProps) {
     running: number
   }
 
-  const prefetchChunk = 200
+  // Prefetch only enough to fill the initial viewport; older messages load on
+  // scroll via loadMore. A large chunk re-downloads long transcripts with all
+  // inline tool outputs, which dominates session load time.
+  const prefetchChunk = 50
   const prefetchConcurrency = 2
   const prefetchPendingLimit = 10
   const span = 4
@@ -2267,12 +2270,6 @@ export default function LegacyLayout(props: ParentProps) {
             : undefined
         }
       />
-      <Show when={serverSDK().reconnecting || serverSDK().catchingUp}>
-        <div data-component="reconnecting-banner" class="flex items-center justify-center gap-2 px-3 py-1.5 text-xs bg-warning/10 text-warning border-b border-warning/20">
-          <div class="size-2 rounded-full bg-warning animate-pulse" />
-          {serverSDK().reconnecting ? "Reconnecting to server..." : "Syncing..."}
-        </div>
-      </Show>
       <Show when={updateVersion() !== undefined}>
         <UpdateAvailableToast version={updateVersion() ?? ""} install={installUpdate} language={language} />
       </Show>

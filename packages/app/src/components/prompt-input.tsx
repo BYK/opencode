@@ -525,8 +525,19 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   const renderEditorWithCursor = (parts: Prompt) => {
     const cursor = currentCursor()
+    const focused = document.activeElement === editorRef
     renderEditor(parts)
-    if (cursor !== null) setCursorPosition(editorRef, cursor)
+    if (cursor !== null) {
+      setCursorPosition(editorRef, cursor)
+      return
+    }
+    // The DOM was rebuilt by an external store change (async draft hydration,
+    // reconnect refresh, etc.). If the editor is focused, the browser would
+    // otherwise drop the caret to offset 0 and clobber the user mid-typing, so
+    // restore to the last known position (or end) instead of the start.
+    if (focused) {
+      setCursorPosition(editorRef, prompt.cursor() ?? savedCursor ?? promptLength(parts))
+    }
   }
 
   createEffect(() => {

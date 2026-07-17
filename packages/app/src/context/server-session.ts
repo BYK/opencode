@@ -847,11 +847,17 @@ export function createServerSession(
     return runInflight(inflight, sessionID, async () => {
       const cached = data.message[sessionID] !== undefined && meta.limit[sessionID] !== undefined
       if (cached && data.info[sessionID] && !options?.force) return
+      // A forced refresh (staleness / reconnect catch-up) only needs the recent
+      // window — new activity is always at the tail, and older already-loaded
+      // messages are kept via preserveUnfetched. Re-downloading the whole
+      // accumulated meta.limit (up to prefetchChunk) with all inline tool
+      // outputs is the main cause of slow reloads, so cap it.
+      const limit =
+        options?.messageLimit ??
+        (options?.force ? initialMessagePageSize : (meta.limit[sessionID] ?? initialMessagePageSize))
       await Promise.all([
         resolve(sessionID, options),
-        cached && !options?.force
-          ? Promise.resolve()
-          : loadMessages(sessionID, options?.messageLimit ?? meta.limit[sessionID] ?? initialMessagePageSize),
+        cached && !options?.force ? Promise.resolve() : loadMessages(sessionID, limit),
       ])
     })
   }
