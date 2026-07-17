@@ -43,7 +43,6 @@ import { NormalizedProviderListResponse } from "@opencode-ai/session-ui/context"
 import { createRefCountMap } from "@/utils/refcount"
 import { useGlobal } from "./global"
 import { ServerConnection, useServer } from "./server"
-import { retry } from "@opencode-ai/core/util/retry"
 import type { ServerScope } from "@/utils/server-scope"
 import { createHomeSessionIndexCache } from "./global-sync/home-session-index"
 import { persisted } from "@/utils/persist"
@@ -366,6 +365,9 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
       void loadCommands(directory, serverSDK.api.command, sdkFor(directory), serverSDK.protocol)
         .then((commands) => setStore("command", commands))
         .catch((err) => {
+          // A reconnect fans bootstrap out across every open project. The titlebar
+          // indicator already reports the shared outage, so avoid one toast per directory.
+          if (!serverSDK.connected()) return
           showToast({
             variant: "error",
             title: language.t("toast.project.reloadFailed.title", { project: getFilename(directory) }),
@@ -449,6 +451,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
             })
             .catch((err) => {
               console.error("Failed to load sessions", err)
+              if (!serverSDK.connected()) return
               const project = getFilename(directory)
               showToast({
                 variant: "error",
@@ -500,6 +503,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
         queryClient,
         session,
         protocol: serverSDK.protocol,
+        connected: serverSDK.connected,
       })
     })
 

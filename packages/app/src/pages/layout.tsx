@@ -2366,7 +2366,7 @@ export default function LegacyLayout(props: ParentProps) {
             >
               <main
                 classList={{
-                  "size-full overflow-x-hidden flex flex-col items-start contain-strict border-t border-border-weak-base bg-background-base xl:border-s xl:rounded-ss-[12px]": true,
+                  "size-full overflow-x-hidden flex flex-col items-start contain-[layout_style_paint] border-t border-border-weak-base bg-background-base xl:border-s xl:rounded-ss-[12px]": true,
                 }}
               >
                 <Show when={!autoselecting.loading} fallback={<div class="size-full" />}>

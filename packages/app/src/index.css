@@ -19,9 +19,17 @@
 }
 
 @media (display-mode: standalone) {
-  /* WebKit excludes safe-area insets from dvh in installed apps. */
+  /*
+   * WebKit excludes safe-area insets from dvh in installed apps, so dvh was
+   * replaced with 100vh here — but on mobile 100vh ignores the dynamic browser
+   * chrome and (per WebKit) the safe-area, making #root taller than the visible
+   * area and pushing the bottom composer (submit button, collapsed question
+   * bar, model selector) below the fold. Use 100svh (small viewport height):
+   * it is the most conservative value and always fits the visible area, and the
+   * layout wrapper already adds env(safe-area-inset-*) padding.
+   */
   #root {
-    height: 100vh;
+    height: 100svh;
   }
 }
 

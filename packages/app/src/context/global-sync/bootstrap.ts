@@ -357,6 +357,10 @@ export async function bootstrapDirectory(input: {
   queryClient: QueryClient
   session?: ServerSession
   protocol?: Promise<ServerProtocol>
+  // When provided and returning false, suppress connection-error toasts so a
+  // single outage does not raise one toast per open project during the
+  // reconnect bootstrap fan-out.
+  connected?: () => boolean
 }) {
   const loading = input.store.status !== "complete"
   const seededProject = projectID(input.directory, input.global.project)
@@ -527,6 +531,7 @@ export async function bootstrapDirectory(input: {
         input.queryClient
           .fetchQuery(loadProvidersQuery(input.scope, input.directory, input.api, input.sdk, input.protocol))
           .catch((err) => {
+            if (input.connected && !input.connected()) return
             const project = getFilename(input.directory)
             showToast({
               variant: "error",
@@ -540,6 +545,7 @@ export async function bootstrapDirectory(input: {
     const slowErrs = errors(await runAll(slow))
     if (slowErrs.length > 0) {
       console.error("Failed to finish bootstrap instance", slowErrs[0])
+      if (input.connected && !input.connected()) return
       const project = getFilename(input.directory)
       showToast({
         variant: "error",
