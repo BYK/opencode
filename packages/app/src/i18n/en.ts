@@ -942,6 +942,8 @@ export const dict = {
   "settings.general.row.mobileTitlebarBottom.title": "Bottom navigation",
   "settings.general.row.mobileTitlebarBottom.description":
     "Place the title bar and session tabs at the bottom of the screen on mobile",
+  "settings.general.row.verticalTabs.title": "Vertical tabs",
+  "settings.general.row.verticalTabs.description": "Show session tabs in a sidebar on the left instead of across the top",
   "settings.general.row.showCustomAgents.title": "Show agent",
   "settings.general.row.showCustomAgents.description":
     "Switch between agents in the composer. When hidden, defaults to Build agent.",

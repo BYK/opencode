@@ -34,6 +34,7 @@ export interface Settings {
     editToolPartsExpanded: boolean
     showCustomAgents: boolean
     mobileTitlebarPosition: "top" | "bottom"
+    tabOrientation: "horizontal" | "vertical"
     newLayoutDesigns?: boolean
     layoutTransitionEligible?: boolean
     agentVisibilityInitialized?: boolean
@@ -195,6 +196,7 @@ const defaultSettings: Settings = {
     editToolPartsExpanded: false,
     showCustomAgents: false,
     mobileTitlebarPosition: "top",
+    tabOrientation: "horizontal",
   },
   appearance: {
     fontSize: 14,
@@ -427,6 +429,13 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         ),
         setMobileTitlebarPosition(value: "top" | "bottom") {
           setStore("general", "mobileTitlebarPosition", value)
+        },
+        tabOrientation: withFallback(
+          () => store.general?.tabOrientation,
+          defaultSettings.general.tabOrientation,
+        ),
+        setTabOrientation(value: "horizontal" | "vertical") {
+          setStore("general", "tabOrientation", value)
         },
         newLayoutDesigns,
         setNewLayoutDesigns(value: boolean) {

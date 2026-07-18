@@ -382,6 +382,18 @@ export const SettingsGeneralV2: Component<{
             </div>
           </SettingsRowV2>
         </Show>
+
+        <SettingsRowV2
+          title={language.t("settings.general.row.verticalTabs.title")}
+          description={language.t("settings.general.row.verticalTabs.description")}
+        >
+          <div data-action="settings-vertical-tabs">
+            <Switch
+              checked={settings.general.tabOrientation() === "vertical"}
+              onChange={(checked) => settings.general.setTabOrientation(checked ? "vertical" : "horizontal")}
+            />
+          </div>
+        </SettingsRowV2>
       </SettingsListV2>
     </div>
   )
