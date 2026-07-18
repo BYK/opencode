@@ -3,7 +3,8 @@ import { useSDK } from "@/context/sdk"
 import { useServerSync } from "@/context/server-sync"
 import { useSync } from "@/context/sync"
 
-const workspaceBarEnabled = import.meta.env.VITE_OPENCODE_CHANNEL !== "prod"
+// Worktrees are a stable capability and should remain available in release builds.
+const workspaceBarEnabled = true
 
 export function resolveNewSessionWorktree(input: {
   enabled: boolean

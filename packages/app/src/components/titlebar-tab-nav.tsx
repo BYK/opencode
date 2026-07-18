@@ -8,6 +8,8 @@ import { useGlobal } from "@/context/global"
 import { useLanguage } from "@/context/language"
 import { ServerConnection, serverName } from "@/context/server"
 import { displayName, projectForSession } from "@/pages/layout/helpers"
+import { getFilename } from "@opencode-ai/core/util/path"
+import { pathKey } from "@/utils/path-key"
 import { SessionTabAvatar } from "@/pages/layout/session-tab-avatar"
 import type { Session } from "@opencode-ai/sdk/v2"
 import { canOpenTabRename, forwardTabRef } from "./titlebar-tab-gesture"
@@ -67,6 +69,18 @@ export function TabNavItem(props: {
     if (!session) return
     const home = serverCtx()?.sync.data.path.home
     return home ? session.directory.replace(home, "~") : session.directory
+  })
+  // When a session runs inside a git worktree (its directory differs from the
+  // project root), surface which worktree it belongs to — the branch name if
+  // known, otherwise the worktree directory name.
+  const worktreeLabel = createMemo(() => {
+    const session = props.session()
+    if (!session) return
+    const root = project()?.worktree
+    if (!root || pathKey(session.directory) === pathKey(root)) return
+    const ctx = serverCtx()
+    const branch = ctx ? ctx.sync.peek(session.directory, { bootstrap: false })[0].vcs?.branch : undefined
+    return branch ?? getFilename(session.directory)
   })
   // Only label the server when multiple servers are connected.
   const serverLabel = createMemo(() => {
@@ -276,6 +290,18 @@ export function TabNavItem(props: {
             event.preventDefault()
           }}
         />
+        <Show when={!editing() && worktreeLabel()}>
+          {(label) => (
+            <span
+              data-slot="tab-worktree"
+              title={label()}
+              class="flex shrink-0 items-center gap-0.5 max-w-24 rounded-[3px] bg-v2-background-bg-layer px-1 text-[11px] leading-4 text-v2-text-text-faint"
+            >
+              <IconV2 name="branch" class="size-3 shrink-0" />
+              <span class="overflow-hidden text-clip whitespace-nowrap">{label()}</span>
+            </span>
+          )}
+        </Show>
       </a>
 
       <div data-slot="tab-close">
