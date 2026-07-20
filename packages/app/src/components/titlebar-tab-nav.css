@@ -142,9 +142,84 @@
     display: none;
   }
 
+  [data-slot="tab-worktree"] {
+    display: none;
+  }
+
   [data-slot="tab-close"] {
     right: auto;
     left: 50%;
     transform: translateX(-50%);
+  }
+
+  /* In the collapsed icon strip, keep the session avatar visible on the active
+     tab and only reveal the close button on hover, so tabs stay identifiable. */
+  [data-titlebar-tab][data-active="true"]:not(:hover) [data-slot="tab-close"] {
+    opacity: 0;
+  }
+}
+
+/* Touch devices have no hover, so `hover-reveal` forces every close button
+   visible. In the collapsed strip that hides the avatars behind X buttons and
+   inverts which tab looks active. Hide all close buttons there; the rail is
+   tapped open to reveal them. */
+@media (hover: none) {
+  @container (max-width: 64px) {
+    [data-slot="tab-close"] {
+      opacity: 0;
+    }
+  }
+}
+
+[data-slot="titlebar-tabs"][data-side="right"] [data-slot="tab-close"] {
+  right: auto;
+  left: 4px;
+}
+
+[data-slot="titlebar-tabs"][data-side="right"] [data-titlebar-tab] [data-slot="tab-close"]::before {
+  right: auto;
+  left: 0;
+  background: linear-gradient(to left, transparent, var(--tab-bg));
+}
+
+/* Expanded vertical session tabs have an explicit metadata row and a title row.
+   The horizontal tab's fixed one-line dimensions are never inherited here. */
+@container (min-width: 65px) {
+  [data-slot="titlebar-tabs"][data-orientation="vertical"] [data-titlebar-tab][data-kind="session"] {
+    height: auto;
+    overflow: visible;
+    white-space: normal;
+  }
+
+  [data-slot="titlebar-tabs"][data-orientation="vertical"] [data-slot="tab-title"] {
+    line-height: 1.25rem;
+  }
+
+  [data-slot="titlebar-tabs"][data-orientation="vertical"][data-side="right"] [data-slot="tab-metadata"] {
+    padding-left: 24px;
+    flex-direction: row-reverse;
+  }
+
+  [data-slot="titlebar-tabs"][data-orientation="vertical"][data-side="left"] [data-slot="tab-metadata"] {
+    padding-right: 24px;
+  }
+}
+
+@container (max-width: 64px) {
+  [data-slot="titlebar-tabs"][data-orientation="vertical"] [data-titlebar-tab][data-kind="session"] {
+    height: 1.75rem;
+    min-height: 1.75rem;
+    flex-direction: row;
+    align-items: center;
+    padding-block: 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  [data-slot="titlebar-tabs"][data-orientation="vertical"] [data-titlebar-tab][data-kind="session"] [data-slot="tab-link"] {
+    height: 100%;
+    flex: 1;
+    flex-direction: row;
+    align-items: center;
   }
 }

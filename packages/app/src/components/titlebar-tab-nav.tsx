@@ -30,6 +30,8 @@ export function TabNavItem(props: {
   onNavigate: () => void
   active?: boolean
   forceTruncate?: boolean
+  vertical?: boolean
+  compact?: () => boolean
   suppressNavigation?: () => boolean
   dragging?: boolean
   pressed?: boolean
@@ -72,12 +74,13 @@ export function TabNavItem(props: {
   })
   // When a session runs inside a git worktree (its directory differs from the
   // project root), surface which worktree it belongs to — the branch name if
-  // known, otherwise the worktree directory name.
+  // known, otherwise the worktree directory name. Sessions at the project root
+  // (no worktree) show "default" so every tab has a recognizable label.
   const worktreeLabel = createMemo(() => {
     const session = props.session()
     if (!session) return
     const root = project()?.worktree
-    if (!root || pathKey(session.directory) === pathKey(root)) return
+    if (!root || pathKey(session.directory) === pathKey(root)) return "default"
     const ctx = serverCtx()
     const branch = ctx ? ctx.sync.peek(session.directory, { bootstrap: false })[0].vcs?.branch : undefined
     return branch ?? getFilename(session.directory)
@@ -91,6 +94,7 @@ export function TabNavItem(props: {
 
   const [popoverOpen, setPopoverOpen] = createSignal(false)
   const previewBlocked = () => !!props.dragging || editing() || !!props.pressed || !props.session()
+  const vertical = () => !!props.vertical && !props.compact?.()
 
   const measureTitleOverflow = () => {
     if (!titleEl || editing()) {
@@ -185,6 +189,78 @@ export function TabNavItem(props: {
     onCleanup(cleanup)
   })
 
+  const avatar = () => (
+    <span data-slot="project-avatar-slot" class="flex size-4 shrink-0 items-center justify-center">
+      <Show
+        when={props.session()}
+        fallback={<span class="block size-4 rounded-[3px] border border-v2-border-border-muted" aria-hidden="true" />}
+      >
+        {(session) => (
+          <SessionTabAvatar
+            project={project()}
+            directory={session().directory}
+            sessionId={session().id}
+            server={props.server}
+          />
+        )}
+      </Show>
+    </span>
+  )
+
+  const tabTitle = () => (
+    <span
+      ref={(el) => {
+        titleEl = el
+        titleEl.textContent = title() ?? ""
+      }}
+      data-slot="tab-title"
+      data-titlebar-tab-title
+      class="min-w-0 flex-1 outline-none leading-4"
+      classList={{
+        "overflow-hidden text-clip whitespace-nowrap": !editing(),
+        "select-text": editing(),
+      }}
+      contenteditable={editing() ? true : undefined}
+      onDblClick={openRename}
+      onKeyDown={(event) => {
+        event.stopPropagation()
+        if (event.key === "Enter") {
+          event.preventDefault()
+          void closeRename(true)
+          return
+        }
+        if (event.key !== "Escape") return
+        event.preventDefault()
+        titleEl.textContent = props.session()?.title ?? ""
+        void closeRename(false)
+      }}
+      onBlur={() => void closeRename(true)}
+      onPointerDown={(event) => {
+        if (!editing()) return
+        event.stopPropagation()
+      }}
+      onClick={(event) => {
+        if (!editing()) return
+        event.preventDefault()
+      }}
+    />
+  )
+
+  const worktree = () => (
+    <Show when={!editing() && worktreeLabel()}>
+      {(label) => (
+        <span
+          data-slot="tab-worktree"
+          title={label()}
+          class="flex shrink-0 items-center gap-0.5 max-w-24 rounded-[3px] bg-v2-background-bg-layer px-1 text-[11px] leading-4 text-v2-text-text-faint"
+        >
+          <IconV2 name="branch" class="size-3 shrink-0" />
+          <span class="overflow-hidden text-clip whitespace-nowrap">{label()}</span>
+        </span>
+      )}
+    </Show>
+  )
+
   const tab = (
     <div
       ref={(el) => {
@@ -193,10 +269,15 @@ export function TabNavItem(props: {
       }}
       data-titlebar-tab
       data-slot="titlebar-tab-item"
+      data-kind="session"
       data-title-overflow={titleOverflowing()}
       data-editing={editing()}
-      class="group relative flex h-7 w-full min-w-0 select-none flex-row items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-[6px] px-1.5 [container-type:inline-size]"
-      classList={{ invisible: props.hidden }}
+      class="group relative flex w-full min-w-0 select-none rounded-[6px] bg-[var(--tab-bg)] px-1.5 [container-type:inline-size] [--tab-bg:var(--v2-background-bg-deep)] hover:[--tab-bg:var(--v2-background-bg-layer-02)] has-[>a:focus-visible]:[--tab-bg:var(--v2-background-bg-layer-02)] data-[active='true']:[--tab-bg:var(--v2-background-bg-layer-02)] data-[dragging='true']:[--tab-bg:var(--v2-background-bg-layer-02)] data-[state='pressed']:[--tab-bg:var(--v2-background-bg-layer-02)] data-[editing='true']:[--tab-bg:var(--v2-background-bg-layer-02)]"
+      classList={{
+        invisible: props.hidden,
+        "h-7 flex-row items-center gap-1.5 overflow-hidden whitespace-nowrap": !vertical(),
+        "min-h-14 flex-col items-stretch gap-1 overflow-visible whitespace-normal py-2": vertical(),
+      }}
       data-active={props.active}
       data-dragging={props.dragging}
       data-state={props.active || props.pressed ? "pressed" : undefined}
@@ -210,99 +291,55 @@ export function TabNavItem(props: {
         closeTab(event)
       }}
     >
-      <a
-        data-slot="tab-link"
-        data-titlebar-tab-link
-        href={props.href}
-        draggable={false}
-        onDragStart={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-        }}
-        onMouseDown={(event) => {
-          // Navigate on mousedown to shave the press-release delay off tab switches.
-          if (event.button !== 0) return
-          if (editing()) return
-          if (props.suppressNavigation?.()) return
-          props.onNavigate()
-        }}
-        onClick={(event) => {
-          event.preventDefault()
-          // Mouse navigation already happened on mousedown; detail 0 means keyboard activation.
-          if (event.detail > 0) return
-          if (editing()) return
-          if (props.suppressNavigation?.()) return
-          props.onNavigate()
-        }}
-        class="flex h-full min-w-0 flex-1 flex-row items-center gap-1.5 text-[13px] font-medium text-v2-text-text-faint group-data-[active='true']:text-v2-text-text-base group-data-[editing='true']:text-v2-text-text-base [-webkit-user-drag:none]"
-      >
-        <span data-slot="project-avatar-slot" class="flex size-4 shrink-0 items-center justify-center">
-          <Show
-            when={props.session()}
-            keyed
-            fallback={
-              <span class="block size-4 rounded-[3px] border border-v2-border-border-muted" aria-hidden="true" />
-            }
-          >
-            {(session) => (
-              <SessionTabAvatar
-                project={project()}
-                directory={session.directory}
-                sessionId={session.id}
-                server={props.server}
-              />
-            )}
-          </Show>
-        </span>
-        <span
-          ref={(el) => {
-            titleEl = el
-            titleEl.textContent = title() ?? ""
-          }}
-          data-slot="tab-title"
-          data-titlebar-tab-title
-          class="min-w-0 flex-1 outline-none leading-4"
-          classList={{
-            "overflow-hidden text-clip whitespace-nowrap": !editing(),
-            "select-text": editing(),
-          }}
-          contenteditable={editing() ? true : undefined}
-          onDblClick={openRename}
-          onKeyDown={(event) => {
-            event.stopPropagation()
-            if (event.key === "Enter") {
-              event.preventDefault()
-              void closeRename(true)
-              return
-            }
-            if (event.key !== "Escape") return
+      <Show when={title() !== undefined}>
+        <a
+          data-slot="tab-link"
+          data-titlebar-tab-link
+          href={props.href}
+          draggable={false}
+          onDragStart={(event) => {
             event.preventDefault()
-            titleEl.textContent = props.session()?.title ?? ""
-            void closeRename(false)
-          }}
-          onBlur={() => void closeRename(true)}
-          onPointerDown={(event) => {
-            if (!editing()) return
             event.stopPropagation()
+          }}
+          onMouseDown={(event) => {
+            // Navigate on mousedown to shave the press-release delay off tab switches.
+            if (event.button !== 0) return
+            if (editing()) return
+            if (props.suppressNavigation?.()) return
+            props.onNavigate()
           }}
           onClick={(event) => {
-            if (!editing()) return
             event.preventDefault()
+            // Mouse navigation already happened on mousedown; detail 0 means keyboard activation.
+            if (event.detail > 0) return
+            if (editing()) return
+            if (props.suppressNavigation?.()) return
+            props.onNavigate()
           }}
-        />
-        <Show when={!editing() && worktreeLabel()}>
-          {(label) => (
-            <span
-              data-slot="tab-worktree"
-              title={label()}
-              class="flex shrink-0 items-center gap-0.5 max-w-24 rounded-[3px] bg-v2-background-bg-layer px-1 text-[11px] leading-4 text-v2-text-text-faint"
-            >
-              <IconV2 name="branch" class="size-3 shrink-0" />
-              <span class="overflow-hidden text-clip whitespace-nowrap">{label()}</span>
+          class="flex min-w-0 text-[13px] font-medium text-v2-text-text-faint group-data-[active='true']:text-v2-text-text-base group-data-[editing='true']:text-v2-text-text-base [-webkit-user-drag:none]"
+          classList={{
+            "h-full flex-1 flex-row items-center gap-1.5": !vertical(),
+            "w-full flex-col items-stretch gap-1": vertical(),
+          }}
+        >
+          <Show
+            when={vertical()}
+            fallback={
+              <>
+                {avatar()}
+                {tabTitle()}
+                {worktree()}
+              </>
+            }
+          >
+            <span data-slot="tab-metadata" class="flex min-w-0 items-center gap-1.5">
+              {avatar()}
+              {worktree()}
             </span>
-          )}
-        </Show>
-      </a>
+            {tabTitle()}
+          </Show>
+        </a>
+      </Show>
 
       <div data-slot="tab-close">
         <IconButtonV2

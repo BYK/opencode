@@ -394,6 +394,32 @@ export const SettingsGeneralV2: Component<{
             />
           </div>
         </SettingsRowV2>
+
+        <Show when={settings.general.tabOrientation() === "vertical"}>
+          <SettingsRowV2
+            title={language.t("settings.general.row.tabRailSide.title")}
+            description={language.t("settings.general.row.tabRailSide.description")}
+          >
+            <div data-action="settings-tab-rail-side">
+              <Switch
+                checked={settings.general.tabRailSide() === "right"}
+                onChange={(checked) => settings.general.setTabRailSide(checked ? "right" : "left")}
+              />
+            </div>
+          </SettingsRowV2>
+        </Show>
+
+        <SettingsRowV2
+          title={language.t("settings.general.row.showReviewPanelButton.title")}
+          description={language.t("settings.general.row.showReviewPanelButton.description")}
+        >
+          <div data-action="settings-show-review-panel-button">
+            <Switch
+              checked={settings.general.showReviewPanelButton()}
+              onChange={(checked) => settings.general.setShowReviewPanelButton(checked)}
+            />
+          </div>
+        </SettingsRowV2>
       </SettingsListV2>
     </div>
   )

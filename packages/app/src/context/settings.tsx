@@ -35,6 +35,8 @@ export interface Settings {
     showCustomAgents: boolean
     mobileTitlebarPosition: "top" | "bottom"
     tabOrientation: "horizontal" | "vertical"
+    tabRailSide: "left" | "right"
+    showReviewPanelButton: boolean
     newLayoutDesigns?: boolean
     layoutTransitionEligible?: boolean
     agentVisibilityInitialized?: boolean
@@ -197,6 +199,8 @@ const defaultSettings: Settings = {
     showCustomAgents: false,
     mobileTitlebarPosition: "top",
     tabOrientation: "horizontal",
+    tabRailSide: "left",
+    showReviewPanelButton: true,
   },
   appearance: {
     fontSize: 14,
@@ -436,6 +440,17 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         ),
         setTabOrientation(value: "horizontal" | "vertical") {
           setStore("general", "tabOrientation", value)
+        },
+        tabRailSide: withFallback(() => store.general?.tabRailSide, defaultSettings.general.tabRailSide),
+        setTabRailSide(value: "left" | "right") {
+          setStore("general", "tabRailSide", value)
+        },
+        showReviewPanelButton: withFallback(
+          () => store.general?.showReviewPanelButton,
+          defaultSettings.general.showReviewPanelButton,
+        ),
+        setShowReviewPanelButton(value: boolean) {
+          setStore("general", "showReviewPanelButton", value)
         },
         newLayoutDesigns,
         setNewLayoutDesigns(value: boolean) {

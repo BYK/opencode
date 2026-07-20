@@ -28,6 +28,7 @@ function SessionTabSlot(props: {
   active: () => boolean
   forceTruncate: boolean
   vertical?: boolean
+  compact?: () => boolean
   session: () => Session | undefined
   fallbackTitle?: string
   onRename: (title: string) => Promise<void>
@@ -66,6 +67,8 @@ function SessionTabSlot(props: {
         onClose={props.onClose}
         active={props.active()}
         forceTruncate={props.forceTruncate}
+        vertical={props.vertical}
+        compact={props.compact}
         dragging={sortable.isDragSource()}
       />
     </div>
@@ -79,6 +82,7 @@ function SessionTabEntry(props: {
   active: () => boolean
   forceTruncate: boolean
   vertical?: boolean
+  compact?: () => boolean
   serverCtx: () => ServerCtx | undefined
   onVisibleChange: (visible: boolean) => void
   onNavigate: (element: HTMLDivElement) => void
@@ -166,6 +170,7 @@ function SessionTabEntry(props: {
         onRename={rename}
         onNavigate={props.onNavigate}
         onClose={props.onClose}
+        compact={props.compact}
       />
     </Show>
   )
@@ -220,6 +225,8 @@ export function TitlebarTabStrip(props: {
   currentTab: () => Tab | undefined
   forceTruncate: boolean
   orientation?: "horizontal" | "vertical"
+  side?: "left" | "right"
+  compact?: () => boolean
   onNavigate: (tab: Tab, el?: HTMLDivElement) => void
   onClose: (tab: Tab) => void
   onReorder: (keys: string[]) => void
@@ -294,14 +301,32 @@ export function TitlebarTabStrip(props: {
     refreshOverflow()
   })
 
+  createEffect(() => {
+    const active = props.currentTab()
+    if (!vertical() || !active || !listRef) return
+    const key = tabKey(active)
+    requestAnimationFrame(() => {
+      const element = Array.from(listRef.querySelectorAll<HTMLElement>("[data-tab-key]")).find(
+        (item) => item.dataset.tabKey === key,
+      )
+      element?.scrollIntoView({ behavior: "instant", block: "nearest" })
+    })
+  })
+
   return (
-    <div data-slot="titlebar-tabs" data-orientation={vertical() ? "vertical" : "horizontal"} class="relative min-w-0">
+    <div
+      data-slot="titlebar-tabs"
+      data-orientation={vertical() ? "vertical" : "horizontal"}
+      data-side={props.side ?? "left"}
+      class="relative min-w-0"
+      classList={{ "h-full": vertical() }}
+    >
       <div
         data-slot="titlebar-tabs-scroll"
         class="flex min-w-0 gap-1.5 no-scrollbar [app-region:no-drag]"
         classList={{
           "flex-row items-center overflow-x-auto": !vertical(),
-          "flex-col overflow-y-auto": vertical(),
+          "h-full flex-col overflow-y-auto": vertical(),
         }}
         ref={scrollRef}
       >
@@ -355,7 +380,7 @@ export function TitlebarTabStrip(props: {
           <div
             data-titlebar-tab-list
             class="flex w-full min-w-0"
-            classList={{ "flex-row items-center": !vertical(), "flex-col": vertical() }}
+            classList={{ "flex-row items-center": !vertical(), "flex-col gap-0.5": vertical() }}
             ref={listRef}
           >
             <For each={props.tabs}>
@@ -379,6 +404,7 @@ export function TitlebarTabStrip(props: {
                       active={() => props.currentTab() === tab}
                       forceTruncate={props.forceTruncate}
                       vertical={vertical()}
+                      compact={props.compact}
                       serverCtx={serverCtx}
                       onVisibleChange={(visible) => setVisibility(id, visible)}
                       onNavigate={(element) => {

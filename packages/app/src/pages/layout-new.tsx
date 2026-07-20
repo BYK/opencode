@@ -44,11 +44,18 @@ export default function NewLayout(props: ParentProps) {
             : undefined
         }
       />
-      <div class="flex min-h-0 min-w-0 flex-1" classList={{ "flex-row": vertical(), "flex-col": !vertical() }}>
+      <div
+        class="flex min-h-0 min-w-0 flex-1"
+        classList={{
+          "flex-row": vertical() && settings.general.tabRailSide() === "left",
+          "flex-row-reverse": vertical() && settings.general.tabRailSide() === "right",
+          "flex-col": !vertical(),
+        }}
+      >
         <Show when={vertical()}>
-          <TitlebarTabRail />
+          <TitlebarTabRail side={settings.general.tabRailSide()} />
         </Show>
-        <main class="flex-1 min-h-0 min-w-0 overflow-x-hidden flex flex-col items-start contain-[layout_style_paint]">
+        <main class="h-full flex-1 min-h-0 min-w-0 overflow-x-hidden flex flex-col items-start contain-[layout_style_paint]">
           <Suspense>{props.children}</Suspense>
         </main>
       </div>
