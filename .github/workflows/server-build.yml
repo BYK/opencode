@@ -1,0 +1,126 @@
+name: server-build
+
+on:
+  push:
+    branches:
+      - byk/cumulative
+    tags:
+      - server-v*.*.*
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  COREPACK_ENABLE_STRICT: "0"
+  FOSSILIZE_NODE_VERSION: "24.16.0"
+
+jobs:
+  build:
+    name: build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x64
+            runner: ubuntu-24.04
+            archive: opencode-server-linux-x64.tar.gz
+          - name: linux-arm64
+            runner: ubuntu-24.04-arm
+            archive: opencode-server-linux-arm64.tar.gz
+          - name: darwin-x64
+            runner: macos-15-intel
+            archive: opencode-server-darwin-x64.tar.gz
+          - name: darwin-arm64
+            runner: macos-14
+            archive: opencode-server-darwin-arm64.tar.gz
+          - name: windows-x64
+            runner: windows-2025
+            archive: opencode-server-windows-x64.tar.gz
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 10.28.0
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.16.0"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Cache Fossilize Node runtime
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .node-cache
+          key: fossilize-node-24.16.0-${{ matrix.name }}
+
+      - name: Install dependencies
+        run: pnpm install --filter opencode... --filter @opencode-ai/app... --ignore-scripts --frozen-lockfile
+
+      - name: Set build version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/server-v* ]]; then
+            echo "OPENCODE_VERSION=${GITHUB_REF_NAME#server-v}" >> "$GITHUB_ENV"
+          else
+            echo "OPENCODE_VERSION=0.0.0-${GITHUB_SHA:0:12}" >> "$GITHUB_ENV"
+          fi
+          echo "OPENCODE_CHANNEL=server" >> "$GITHUB_ENV"
+
+      - name: Build server
+        run: pnpm --filter opencode build:server
+
+      - name: Smoke test server
+        run: node packages/opencode/script/smoke-server.mjs "packages/opencode/dist/server/opencode-server${{ runner.os == 'Windows' && '.exe' || '' }}"
+
+      - name: Archive server
+        run: |
+          mkdir -p artifacts
+          tar -C packages/opencode/dist/server -czf "artifacts/${{ matrix.archive }}" .
+
+      - name: Upload server artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: server-${{ matrix.name }}
+          path: artifacts/${{ matrix.archive }}
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: release
+    if: startsWith(github.ref, 'refs/tags/server-v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download server artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: server-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: artifacts
+        run: sha256sum *.tar.gz > SHA256SUMS
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" artifacts/* --repo "$GITHUB_REPOSITORY" --clobber
