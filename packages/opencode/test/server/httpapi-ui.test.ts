@@ -326,6 +326,18 @@ describe("HttpApi UI fallback", () => {
     }),
   )
 
+  it.live("returns 404 for missing embedded UI assets instead of HTML", () =>
+    Effect.gen(function* () {
+      const fs = yield* FSUtil.Service
+      const response = yield* serveEmbeddedUIEffect("/assets/stale.js", fs, {
+        "index.html": new TextEncoder().encode("<html>opencode</html>"),
+      }).pipe(Effect.map(HttpServerResponse.toWeb))
+
+      expect(response.status).toBe(404)
+      expect(response.headers.get("content-type")).toContain("application/json")
+    }),
+  )
+
   it.live("allows embedded UI terminal wasm, blob attachments, and theme preload CSP", () =>
     Effect.gen(function* () {
       const script = 'document.documentElement.dataset.theme = "dark"'

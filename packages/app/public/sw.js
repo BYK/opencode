@@ -1,9 +1,9 @@
 /// <reference lib="webworker" />
-const CACHE_NAME = "opencode-v1"
+const CACHE_NAME = "opencode-v2"
 
 /** @param {string} url */
 function isHashedAsset(url) {
-  return /\/assets\/[^/]+[-.][\da-f]{8,}\.\w+$/.test(url)
+  return /\/assets\/[^/]+[-.][\w-]{8,}\.\w+$/.test(url)
 }
 
 /** @param {string} url */
@@ -23,9 +23,9 @@ self.addEventListener("install", () => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))),
-    ),
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))),
   )
   self.clients.claim()
 })
@@ -35,19 +35,16 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return
   if (isAPIorEvent(request.url)) return
 
-  // Navigation requests: stale-while-revalidate for instant page loads
+  // Keep the HTML and its content-hashed assets from different builds from being mixed.
   if (request.mode === "navigate") {
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) =>
-        cache.match("/index.html").then((cached) => {
-          const fresh = fetch(request)
-            .then((response) => {
-              if (response.ok) cache.put("/index.html", response.clone())
-              return response
-            })
-            .catch(() => cached)
-          return cached || fresh
-        }),
+        fetch(request)
+          .then((response) => {
+            if (response.ok) cache.put("/index.html", response.clone())
+            return response
+          })
+          .catch(() => cache.match("/index.html")),
       ),
     )
     return

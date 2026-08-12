@@ -74,7 +74,8 @@ function embeddedUIResponse(file: string, body: Uint8Array) {
 
 export function serveEmbeddedUIEffect(requestPath: string, fs: FSUtil.Interface, embeddedWebUI: EmbeddedWebUI) {
   const requested = requestPath.replace(/^\//, "")
-  const key = embeddedWebUI[requested] ? requested : "index.html"
+  const key = embeddedWebUI[requested] ? requested : /\.[^/]+$/.test(requested) ? undefined : "index.html"
+  if (!key) return Effect.succeed(notFound())
   const file = embeddedWebUI[key] ?? null
   if (!file) return Effect.succeed(notFound())
   if (file instanceof Uint8Array) return Effect.succeed(embeddedUIResponse(key, file))
